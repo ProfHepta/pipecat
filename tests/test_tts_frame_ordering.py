@@ -2531,5 +2531,24 @@ async def test_token_inline_tts_markup_tracks_word_by_word():
     )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", [TextAggregationMode.SENTENCE, TextAggregationMode.TOKEN])
+async def test_tts_speak_frame_labels_its_text(mode):
+    """The text frames pushed for a TTSSpeakFrame carry its aggregation type."""
+    tts = MockHttpPushTextTTSService(text_aggregation_mode=mode)
+    frames_received = await run_test(
+        tts,
+        frames_to_send=[
+            TTSSpeakFrame(
+                text="One moment, please.", append_to_context=False, aggregated_by="status"
+            )
+        ],
+    )
+    text_frames = [f for f in frames_received[0] if isinstance(f, AggregatedTextFrame)]
+
+    assert text_frames
+    assert {f.aggregated_by for f in text_frames} == {"status"}
+
+
 if __name__ == "__main__":
     unittest.main()

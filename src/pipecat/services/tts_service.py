@@ -975,7 +975,7 @@ class TTSService(AIService):
             push_assistant_aggregation = frame.append_to_context and not self._llm_response_started
             # Assumption: text in TTSSpeakFrame does not include inter-frame spaces
             await self._push_tts_frames(
-                AggregatedTextFrame(frame.text, AggregationType.SENTENCE, raw_text=frame.text),
+                AggregatedTextFrame(frame.text, frame.aggregated_by, raw_text=frame.text),
                 append_tts_text_to_context=frame.append_to_context,
                 push_assistant_aggregation=push_assistant_aggregation,
             )

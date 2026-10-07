@@ -1479,6 +1479,21 @@ async def _stream(seq, ctx, *tokens):
 
 
 class TestRegisterSpokenStreaming(unittest.IsolatedAsyncioTestCase):
+    async def test_promoted_sentence_keeps_the_type_its_text_was_given_with(self):
+        seq = _seq(streaming=True)
+        frame = AggregatedTextFrame("One moment, please.", "status")
+        await seq.register_spoken(frame, "ctx1", "One moment, please.", append_to_context=False)
+        await seq.finalize("ctx1")
+        self.assertEqual(seq._slots[0].frame.aggregated_by, "status")
+
+    async def test_streamed_tokens_promote_as_a_sentence(self):
+        seq = _seq(streaming=True)
+        for token in ("Hi", " there", "!"):
+            frame = AggregatedTextFrame(token, AggregationType.TOKEN)
+            await seq.register_spoken(frame, "ctx1", token, append_to_context=True)
+        await seq.finalize("ctx1")
+        self.assertEqual(seq._slots[0].frame.aggregated_by, AggregationType.SENTENCE)
+
     async def test_non_terminal_tokens_do_not_promote(self):
         seq = _seq(streaming=True)
         await _stream(seq, "ctx1", "Hi", " there")

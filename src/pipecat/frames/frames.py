@@ -882,10 +882,15 @@ class TTSSpeakFrame(DataFrame):
         append_to_context: Whether the spoken text should be appended to the LLM
             context. Defaults to True. (Note that, as of version 1.4.0, ``None`` —
             the previous default — is no longer a supported value.)
+        aggregated_by: The aggregation type of the text frames the TTS service
+            pushes for the spoken text, a sentence by default. A custom type
+            lets them be told apart, for example to keep them from the client
+            with ``RTVIObserverParams.skip_aggregator_types``.
     """
 
     text: str
     append_to_context: bool = True
+    aggregated_by: AggregationType | str = AggregationType.SENTENCE
 
     def __post_init__(self):
         super().__post_init__()

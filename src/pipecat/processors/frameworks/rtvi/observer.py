@@ -246,6 +246,8 @@ class RTVIObserver(BaseObserver):
         # Track bot speaking state for queuing aggregated text frames
         self._bot_is_speaking = False
         self._queued_aggregated_text_frames: list[AggregatedTextFrame] = []
+        # The TTS context whose latest segment was skipped (see _is_skipped)
+        self._skipped_context_id: str | None = None
 
         if self._params.system_logs_enabled:
             self._system_logger_id = logger.add(self._logger_sink)
@@ -688,6 +690,12 @@ class RTVIObserver(BaseObserver):
         if self._is_legacy_client:
             return
 
+        if (
+            self._params.skip_aggregator_types
+            and frame.aggregated_by in self._params.skip_aggregator_types
+        ):
+            return
+
         logger.trace(
             f"{self} TTS progress: context_id={frame.context_id} "
             f"source_segment_id={frame.segment_id} "
@@ -731,13 +739,27 @@ class RTVIObserver(BaseObserver):
             )
             await self.send_rtvi_message(message)
 
+    def _is_skipped(self, frame: AggregatedTextFrame) -> bool:
+        """Whether the frame's aggregation type keeps it from the client."""
+        skip_types = self._params.skip_aggregator_types
+        if not skip_types:
+            return False
+        if frame.aggregated_by in skip_types:
+            # A skipped segment's words come next: remember its context to skip them.
+            self._skipped_context_id = frame.context_id
+            return True
+        # A word frame has no segment, only a TTS context. It belongs to that
+        # context's latest segment and is skipped when that segment was.
+        if frame.aggregated_by == AggregationType.WORD:
+            return frame.context_id is not None and frame.context_id == self._skipped_context_id
+        # A shown segment replaces the skipped one, and its words are shown too.
+        if frame.context_id == self._skipped_context_id:
+            self._skipped_context_id = None
+        return False
+
     async def _send_aggregated_llm_text(self, frame: AggregatedTextFrame):
         """Send aggregated LLM text messages."""
-        # Skip certain aggregator types if configured to do so.
-        if (
-            self._params.skip_aggregator_types
-            and frame.aggregated_by in self._params.skip_aggregator_types
-        ):
+        if self._is_skipped(frame):
             return
 
         agg_type = frame.aggregated_by
