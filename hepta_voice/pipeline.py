@@ -1,4 +1,4 @@
-"""Actual Pipecat Pipeline, VAD/turn aggregation, local Ollama and native function calling."""
+"""Actual Pipecat Pipeline, VAD/turn aggregation, Pocket4 llama.cpp GPU and native function calling."""
 import asyncio,json,time,uuid
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
@@ -9,10 +9,10 @@ from pipecat.workers.runner import WorkerRunner
 from pipecat.processors.frame_processor import FrameProcessor,FrameDirection
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import LLMContextAggregatorPair,LLMUserAggregatorParams
-from pipecat.services.ollama.llm import OLLamaLLMService
+from .llama_client import LocalLlamaService
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
-from .config import MODEL,OLLAMA,SYSTEM
+from .config import MODEL,SYSTEM
 from .services import SenseVoiceSTTService,MeloTTSService
 from .transport import PocketPCMTransport
 from .speech_policy import enforce,spoken_form
@@ -28,7 +28,7 @@ class ClosedFunctionSchema(FunctionSchema):
 class State:
     def __init__(self,ws,ledger):
         self.ws=ws;self.ledger=ledger;self.closed=False;self.send_lock=asyncio.Lock()
-        self.pending=None;self.active=None;self.text='';self.safe_text='';self.started=0
+        self.pending=None;self.active=None;self.text='';self.safe_text='';self.started=0;self.llm_first_token_seconds=None;self.llm_complete_seconds=None
         self.epoch=0;self.audio_frames=0;self.first_audio=None;self.receipt=None;self.tool_failed=False;self.tool_calls=0;self.tool_waiting=False
     async def emit(self,event):
         if not self.closed and not self.ws.closed:
@@ -45,7 +45,7 @@ class State:
     def begin(self):
         if self.pending:
             self.cancel_active();self.active,self.text=self.pending;self.pending=None
-            self.started=time.monotonic();self.first_audio=None;self.audio_frames=0;self.tool_calls=0
+            self.started=time.monotonic();self.first_audio=None;self.audio_frames=0;self.tool_calls=0;self.llm_first_token_seconds=None;self.llm_complete_seconds=None
         self.safe_text=''
 
 class Admission(FrameProcessor):
@@ -75,6 +75,8 @@ class AuthorityGuard(FrameProcessor):
             self.state.tool_waiting=True
             await self.push_frame(frame,direction)
         elif isinstance(frame,LLMTextFrame):
+            if frame.text and self.state.llm_first_token_seconds is None:
+                self.state.llm_first_token_seconds=time.monotonic()-self.state.started
             self.buffer+=frame.text
             if len(self.buffer)>1600:raise ValueError('llm_response_limit')
         elif isinstance(frame,LLMFullResponseEndFrame):
@@ -92,6 +94,7 @@ class AuthorityGuard(FrameProcessor):
                 if d.reason:await self.state.emit({'type':'policy_guard','reason':d.reason})
             if any(x in reply for x in ('<think>','<tool_call>','<|im_')):reply='模型输出不符合语音要求，这次回复未执行任何操作。'
             if reply:
+                self.state.llm_complete_seconds=time.monotonic()-self.state.started
                 self.state.safe_text=reply
                 await self.push_frame(LLMTextFrame(spoken_form(reply)))
             await self.push_frame(frame,direction)
@@ -106,14 +109,14 @@ class ReceiptObserver(FrameProcessor):
             if s.active and s.safe_text and s.audio_frames:
                 s.ledger.finish(s.active,'done',{'audio_generated':True,'delivery':'frames_sent_not_human_confirmed','framework':'pipecat-1.12.0'})
                 await s.emit({'type':'turn_done','id':s.active,'epoch':s.epoch,'text':s.safe_text,
-                  'first_audio_seconds':s.first_audio-s.started if s.first_audio else None,'audio_frames':s.audio_frames})
+                  'first_audio_seconds':s.first_audio-s.started if s.first_audio else None,'audio_frames':s.audio_frames,'llm_first_token_seconds':s.llm_first_token_seconds,'llm_complete_seconds':s.llm_complete_seconds})
                 s.active=None
         if isinstance(frame,ErrorFrame):await self.state.emit({'type':'error','code':'pipecat_error','detail':str(frame.error)[:160]})
         await self.push_frame(frame,direction)
 
 def build(state,models):
     transport=PocketPCMTransport(state)
-    llm=OLLamaLLMService(base_url=OLLAMA,settings=OLLamaLLMService.Settings(model=MODEL,system_instruction=SYSTEM,temperature=0,max_tokens=96),max_retries=0)
+    llm=LocalLlamaService(settings=LocalLlamaService.Settings(model=MODEL,system_instruction=SYSTEM,temperature=0,seed=42,max_tokens=96),max_retries=0)
     tool=ClosedFunctionSchema(name='telephone_status',description='固定只读检查Pocket4的音频端点与活动通话数量。没有参数，arguments必须为{}，不得添加endpoint、target等字段。不接听、不拨号、不发送短信。',properties={},required=[])
     context=LLMContext(tools=ToolsSchema(standard_tools=[tool]))
     user,assistant=LLMContextAggregatorPair(context,user_params=LLMUserAggregatorParams(

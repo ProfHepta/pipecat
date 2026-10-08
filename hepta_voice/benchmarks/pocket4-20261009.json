@@ -1,0 +1,234 @@
+{
+  "schema": 1,
+  "source_commit": "d81235049384534c167caea52b85a694f6103d14",
+  "release": "v0.6.0",
+  "binary_release": "b11429",
+  "model_sha256": "85e4a5b7b8ef0e48af0e8658f5aaab9c2324c76c1641493f4d1e25fce54b18b9",
+  "model": "Qwen3-4B-Instruct-2507-Q4_K_M",
+  "context": 4096,
+  "parallel": 1,
+  "k_cache": "f16",
+  "v_cache": "f16",
+  "temperature": 0,
+  "seed": 42,
+  "threads": 4,
+  "batch": 512,
+  "ubatch": 512,
+  "output_tokens": 96,
+  "prompt_cache": false,
+  "same_prompt_token_hashes": true,
+  "rows": [
+    {
+      "backend": "vulkan",
+      "flash_attention": false,
+      "version": "version: 0.6.0-dev (build 11429, commit d81235049)\nbuilt with GNU 11.4.0 for Linux x86_64",
+      "binary_sha256": "5faf410bbbc00a1b94b09ee01623699f255365628dfa73b1ee552d9e52a2231d",
+      "startup_to_ready_seconds": 0.8090966889994888,
+      "first_request_ttft_seconds": 1.00808942599906,
+      "performance": {
+        "512": {
+          "repetitions": 3,
+          "prompt_tps_median": 533.379448431479,
+          "generation_tps_median": 30.23225692708521,
+          "ttft_seconds_median": 0.961184752999543,
+          "ttft_seconds_samples": [
+            0.8857677619998867,
+            0.961184752999543,
+            1.0846152799986157
+          ]
+        },
+        "2048": {
+          "repetitions": 3,
+          "prompt_tps_median": 525.8691412644225,
+          "generation_tps_median": 25.649568574256584,
+          "ttft_seconds_median": 3.8961616390006384,
+          "ttft_seconds_samples": [
+            3.8961616390006384,
+            3.858338202999221,
+            4.101533371000187
+          ]
+        }
+      },
+      "fixed_quality_checks_passed": 6,
+      "fixed_quality_checks_total": 6,
+      "tool_parse_pass": true,
+      "telemetry": {
+        "samples": 188,
+        "peak_gpu_busy_percent": 100,
+        "peak_vram_bytes": 4176838656,
+        "max_temperature_c": 61.0
+      },
+      "after_exit": {
+        "gpu_busy_percent": 4,
+        "mem_info_vram_used": 717152256,
+        "mem_info_gtt_used": 145162240,
+        "temp_c": 49.0
+      },
+      "gpu_layers": "37/37"
+    },
+    {
+      "backend": "hip",
+      "flash_attention": false,
+      "version": "version: 0.6.0-dev (build 11429, commit d81235049)\nbuilt with GNU 13.3.0 for Linux x86_64",
+      "binary_sha256": "5a2b208943ca04915d380824f3fcf79f1708b22d8157e4db3cb18b3e52b8b8cc",
+      "startup_to_ready_seconds": 1.2082187770010933,
+      "first_request_ttft_seconds": 1.4756798390008043,
+      "performance": {
+        "512": {
+          "repetitions": 3,
+          "prompt_tps_median": 298.7846118922111,
+          "generation_tps_median": 10.71070849871043,
+          "ttft_seconds_median": 1.7149804230011796,
+          "ttft_seconds_samples": [
+            1.7149804230011796,
+            1.7455454580012884,
+            1.6256075060009607
+          ]
+        },
+        "2048": {
+          "repetitions": 3,
+          "prompt_tps_median": 230.65720296380988,
+          "generation_tps_median": 7.846625075699283,
+          "ttft_seconds_median": 8.880714808999983,
+          "ttft_seconds_samples": [
+            9.055448697999964,
+            8.880714808999983,
+            7.933602916999007
+          ]
+        }
+      },
+      "fixed_quality_checks_passed": 6,
+      "fixed_quality_checks_total": 6,
+      "tool_parse_pass": true,
+      "telemetry": {
+        "samples": 443,
+        "peak_gpu_busy_percent": 100,
+        "peak_vram_bytes": 720994304,
+        "max_temperature_c": 63.0
+      },
+      "after_exit": {
+        "gpu_busy_percent": 4,
+        "mem_info_vram_used": 717152256,
+        "mem_info_gtt_used": 145162240,
+        "temp_c": 52.0
+      },
+      "gpu_layers": "37/37"
+    },
+    {
+      "backend": "hip",
+      "flash_attention": true,
+      "version": "version: 0.6.0-dev (build 11429, commit d81235049)\nbuilt with GNU 13.3.0 for Linux x86_64",
+      "binary_sha256": "5a2b208943ca04915d380824f3fcf79f1708b22d8157e4db3cb18b3e52b8b8cc",
+      "startup_to_ready_seconds": 1.6111705839994102,
+      "first_request_ttft_seconds": 0.9429104969985929,
+      "performance": {
+        "512": {
+          "repetitions": 3,
+          "prompt_tps_median": 393.0887021546942,
+          "generation_tps_median": 12.726685716505706,
+          "ttft_seconds_median": 1.3039599589992577,
+          "ttft_seconds_samples": [
+            1.2541465909998806,
+            1.3039599589992577,
+            1.328418437999062
+          ]
+        },
+        "2048": {
+          "repetitions": 3,
+          "prompt_tps_median": 373.65860119953896,
+          "generation_tps_median": 11.99650661727305,
+          "ttft_seconds_median": 5.483407449000879,
+          "ttft_seconds_samples": [
+            5.529684578999877,
+            5.483407449000879,
+            5.386978245000137
+          ]
+        }
+      },
+      "fixed_quality_checks_passed": 6,
+      "fixed_quality_checks_total": 6,
+      "tool_parse_pass": true,
+      "telemetry": {
+        "samples": 321,
+        "peak_gpu_busy_percent": 100,
+        "peak_vram_bytes": 718905344,
+        "max_temperature_c": 65.0
+      },
+      "after_exit": {
+        "gpu_busy_percent": 4,
+        "mem_info_vram_used": 717152256,
+        "mem_info_gtt_used": 145162240,
+        "temp_c": 53.0
+      },
+      "gpu_layers": "37/37"
+    },
+    {
+      "backend": "vulkan",
+      "flash_attention": true,
+      "version": "version: 0.6.0-dev (build 11429, commit d81235049)\nbuilt with GNU 11.4.0 for Linux x86_64",
+      "binary_sha256": "5faf410bbbc00a1b94b09ee01623699f255365628dfa73b1ee552d9e52a2231d",
+      "startup_to_ready_seconds": 1.0067218240001239,
+      "first_request_ttft_seconds": 0.855553133000285,
+      "performance": {
+        "512": {
+          "repetitions": 3,
+          "prompt_tps_median": 617.6704414534074,
+          "generation_tps_median": 32.68816079547155,
+          "ttft_seconds_median": 0.8303564249999908,
+          "ttft_seconds_samples": [
+            0.8303564249999908,
+            0.8175239920001331,
+            0.9101279339993198
+          ]
+        },
+        "2048": {
+          "repetitions": 3,
+          "prompt_tps_median": 614.5647033404953,
+          "generation_tps_median": 30.39642051751986,
+          "ttft_seconds_median": 3.334165229000064,
+          "ttft_seconds_samples": [
+            3.334165229000064,
+            3.592759200999353,
+            3.3040337599995837
+          ]
+        }
+      },
+      "fixed_quality_checks_passed": 6,
+      "fixed_quality_checks_total": 6,
+      "tool_parse_pass": true,
+      "telemetry": {
+        "samples": 163,
+        "peak_gpu_busy_percent": 100,
+        "peak_vram_bytes": 3905204224,
+        "max_temperature_c": 66.0
+      },
+      "after_exit": {
+        "gpu_busy_percent": 4,
+        "mem_info_vram_used": 717152256,
+        "mem_info_gtt_used": 145162240,
+        "temp_c": 52.0
+      },
+      "gpu_layers": "37/37"
+    }
+  ],
+  "started_at": "2026-10-08T18:02:46.926219+00:00",
+  "finished_at": "2026-10-08T18:07:40.876871+00:00",
+  "selected_candidate": "vulkan_fa_on",
+  "deployment_complete": false,
+  "pipecat_refactor_tests": {
+    "passed": 64,
+    "scope": "unit tests only; live endpoint integration not executed"
+  },
+  "full_first_audio_seconds": null,
+  "telephone_remote_first_audio_seconds": null,
+  "limits": [
+    "Deployment and credential-transfer tool call was safety-blocked; not retried.",
+    "Process startup timings do not flush OS page or shader caches; not machine cold boot.",
+    "Official same-commit backend binaries use different GCC versions; result compares shipped configurations.",
+    "Three repetitions per prompt size are not P95 or long-duration reliability qualification.",
+    "Fixed correctness examples are not comprehensive model quality certification."
+  ],
+  "protected_service_pids_unchanged": true,
+  "gpu_released": true,
+  "new_llama_server_running_at_end": false
+}

@@ -13,6 +13,7 @@ from .control import Ledger,Rejected,checked_id
 from .lease import Lease
 from .models import Models
 from .pipeline import State,build
+from .llama_client import verify_engine_properties
 
 def read_wav(raw):
     with wave.open(io.BytesIO(raw)) as w:
@@ -30,13 +31,20 @@ def wav(pcm):
 
 async def main():
     os.umask(0o077);STATE.mkdir(parents=True,exist_ok=True)
+    # No automatic fallback to the removed local Ollama backend.
+    if not (STATE/'llama.key').is_file() or not (STATE/'llama.sock').exists():
+        raise RuntimeError('pocket4_llama_endpoint_not_installed')
     lease=Lease(STATE/'pipeline-owner.lock').acquire()
     token=(STATE/'access.token').read_text().strip()
     if len(token)<32:raise RuntimeError('invalid_auth_token')
     ledger=Ledger(STATE/'ledger.sqlite3');models=Models();busy=False
-    http=aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=180),trust_env=False)
-    async with http.post('http://127.0.0.1:11445/api/generate',json={'model':MODEL,'prompt':'','stream':False,'keep_alive':-1,'options':{'num_gpu':0,'num_thread':4,'num_ctx':4096}}) as r:
-        r.raise_for_status();assert (await r.json()).get('done')
+    engine_key=(STATE/'llama.key').read_text().strip()
+    http=aiohttp.ClientSession(connector=aiohttp.UnixConnector(path=str(STATE/'llama.sock')),
+        headers={'Authorization':'Bearer '+engine_key},timeout=aiohttp.ClientTimeout(total=30),trust_env=False)
+    async with http.get('http://localhost/health') as r:
+        r.raise_for_status();assert (await r.json()).get('status')=='ok'
+    async with http.get('http://localhost/props') as r:
+        r.raise_for_status();verify_engine_properties(await r.json())
     await models.synth('你好。')
     @web.middleware
     async def auth(req,handler):
@@ -45,10 +53,14 @@ async def main():
         except (Rejected,ValueError,TypeError,KeyError,AttributeError,wave.Error,json.JSONDecodeError) as e:return web.json_response({'error':str(e)[:150]},status=400)
     app=web.Application(middlewares=[auth],client_max_size=2*1024*1024)
     async def health(req):
-        async with http.get('http://127.0.0.1:11445/api/ps') as r:r.raise_for_status();j=await r.json()
-        loaded=any(x['name']==MODEL for x in j.get('models',[]))
+        try:
+            async with http.get('http://localhost/health') as r:
+                r.raise_for_status();loaded=(await r.json()).get('status')=='ok'
+            async with http.get('http://localhost/props') as r:
+                r.raise_for_status();verify_engine_properties(await r.json())
+        except (aiohttp.ClientError,asyncio.TimeoutError,RuntimeError):loaded=False
         return web.json_response({'ready':loaded,'framework':'pipecat','version':version('pipecat-ai'),'model':MODEL,
-          'active_session':busy,'gpu_enabled':False,'production_ready':False,'phone_authority':False,'microphone_open':False,
+          'active_session':busy,'gpu_enabled':False,'llm_engine':'llama.cpp','llm_gpu_host':'pocket4','llm_gpu_requested':True,'production_ready':False,'phone_authority':False,'microphone_open':False,
           'write_tools':[],'read_only_tools':['telephone_status'],'network_interfaces':socket.if_nameindex()})
     async def network(req):
         out={}

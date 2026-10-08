@@ -6,14 +6,14 @@ from hepta_voice.server import read_wav
 from hepta_voice.services import SenseVoiceSTTService,MeloTTSService
 from pipecat.services.stt_service import SegmentedSTTService
 from pipecat.services.tts_service import TTSService
-from pipecat.services.ollama.llm import OLLamaLLMService
-from hepta_voice.config import OLLAMA
+from hepta_voice.llama_client import LocalLlamaService,verify_engine_properties
+from hepta_voice.config import LLAMA_URL
 import io,wave
 
 def test_real_upstream_service_contracts():
     assert issubclass(SenseVoiceSTTService,SegmentedSTTService)
     assert issubclass(MeloTTSService,TTSService)
-    assert OLLAMA=='http://127.0.0.1:11445/v1'
+    assert LLAMA_URL=='http://localhost/v1'
 
 def test_exclusive_service_owner(tmp_path):
     a=Lease(tmp_path/'owner').acquire()
@@ -48,3 +48,10 @@ def test_native_function_schema_is_closed():
     assert definition['strict'] is True
     assert definition['parameters']['additionalProperties'] is False
     assert definition['parameters']['properties']=={}
+
+@pytest.mark.parametrize('change',[{'total_slots':2},{'model_alias':'wrong'},{'model_ftype':'Q8_0'},{'default_generation_settings':{'n_ctx':8192}}])
+def test_engine_must_match_fixed_model_and_context(change):
+    props={'model_alias':'hepta-qwen3-4b','model_ftype':'Q4_K - Medium','total_slots':1,'default_generation_settings':{'n_ctx':4096}}
+    assert verify_engine_properties(props)
+    props.update(change)
+    with pytest.raises(RuntimeError):verify_engine_properties(props)

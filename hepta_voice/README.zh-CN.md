@@ -1,3 +1,14 @@
+# 当前分支：Pocket4 llama.cpp GPU 迁移草稿
+
+本分支固定同一 Qwen3 4B Q4_K_M，完成了 Pocket4 上 llama.cpp v0.6.0 / b11429 的 Vulkan/HIP × FA开关四组实测。首选 **Vulkan + FA on + F16 KV + 4K + 单会话**。结果见 `benchmarks/pocket4-20261009.json` 与 `GPU_AB_20261009.md`。
+
+Pipecat 的模型适配和启动检查已改为本地 llama.cpp 兼容接口；ASR/TTS继续在 qian-qi 的CPU运行，qian-qi GPU保持不启用。无Ollama回退。**跨机端点部署与凭据转移调用被安全检查拦截，没有重试；服务保持停止，不应把源码修改当成接管成功。** 缺少端点文件时启动会明确拒绝。
+
+64项单元测试通过，但没有新的完整首音/电话对端首音数据。GPU基准与语音验收必须分开。接口要求的 `state/llama.key`、`state/llama.sock` 尚未部署；不要执行下方历史版本的启动流程来推断当前分支可用。
+
+---
+## 以下为迁移前的历史说明
+
 # Hepta Local Voice — Pipecat 适配层
 
 本目录建立在 Pipecat **v1.12.0 / 1559a684b1ee9771b36454b72418d7364b518e7f** 上。运行依赖固定到 `requirements.lock`；当前使用发行版 wheel 提供完整 Python 包和内置 Silero/Smart Turn 模型，而不是从不完整的稀疏检出中直接导入。
