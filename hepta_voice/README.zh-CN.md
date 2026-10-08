@@ -1,3 +1,7 @@
+## 本轮新增记录：GPU接线仍阻塞，NPU候选实测不晋级
+
+详见 `NPU_TIMING_20261009.md`。新增首音分段埋点和69项单元测试；没有新的完整GPU首音成绩。Pocket4真实通过XRT GEMM和FastFlowLM栈验证，并完成Whisper NPU转写实验，但短句响应和质量未达到替换门槛。没有替换SenseVoice，也没有开启电话接管。
+
 # 当前分支：Pocket4 llama.cpp GPU 迁移草稿
 
 本分支固定同一 Qwen3 4B Q4_K_M，完成了 Pocket4 上 llama.cpp v0.6.0 / b11429 的 Vulkan/HIP × FA开关四组实测。首选 **Vulkan + FA on + F16 KV + 4K + 单会话**。结果见 `benchmarks/pocket4-20261009.json` 与 `GPU_AB_20261009.md`。

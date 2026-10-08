@@ -1,5 +1,5 @@
 """Minimal local-model adapters using Pipecat's native STT/TTS lifecycle."""
-import asyncio
+import asyncio,time
 from pipecat.services.stt_service import SegmentedSTTService
 from pipecat.services.tts_service import TTSService
 from pipecat.services.settings import STTSettings,TTSSettings
@@ -8,22 +8,32 @@ from pipecat.frames.frames import TranscriptionFrame,TTSStartedFrame,TTSStoppedF
 from pipecat.utils.time import time_now_iso8601
 
 class SenseVoiceSTTService(SegmentedSTTService):
-    def __init__(self,models):
+    def __init__(self,models,state=None):
         super().__init__(sample_rate=16000,trailing_silence_secs=.3,settings=STTSettings(model='sensevoice-int8',language=Language.ZH))
-        self.models=models
+        self.models=models;self.state=state
     @property
     def wants_wav_segments(self):return False
     async def run_stt(self,audio):
+        stages={'asr_start':time.monotonic_ns()}
+        if self.state is not None and self.state.input_end_ingress_ns is not None:
+            stages['input_end_ingress']=self.state.input_end_ingress_ns
+            self.state.input_end_ingress_ns=None
         text=await self.models.decode(audio,self.sample_rate)
-        if text:yield TranscriptionFrame(text,self._user_id,time_now_iso8601(),language=Language.ZH,finalized=True)
+        stages['asr_final']=time.monotonic_ns()
+        if text:
+            frame=TranscriptionFrame(text,self._user_id,time_now_iso8601(),language=Language.ZH,finalized=True)
+            frame.metadata['hepta_stages_ns']=stages
+            yield frame
 
 class MeloTTSService(TTSService):
-    def __init__(self,models):
+    def __init__(self,models,state=None):
         super().__init__(sample_rate=16000,settings=TTSSettings(model='melo-fp32',voice='0',language=Language.ZH))
-        self.models=models
+        self.models=models;self.state=state
     async def run_tts(self,text,context_id):
         yield TTSStartedFrame(context_id=context_id)
+        trace=self.state.trace if self.state is not None else None
         pcm=await self.models.synth(text)
+        if trace is not None and self.state.trace is trace:trace.mark('tts_first_ready')
         for start in range(0,len(pcm),6400):
             yield TTSAudioRawFrame(pcm[start:start+6400],16000,1,context_id=context_id)
         yield TTSStoppedFrame(context_id=context_id)

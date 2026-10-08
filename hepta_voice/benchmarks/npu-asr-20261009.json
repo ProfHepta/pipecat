@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-09",
+  "main_gpu_voice_connection": "blocked_by_platform_deployment_action_not_retried",
+  "full_gpu_voice_first_audio_seconds": null,
+  "telephone_remote_first_audio_seconds": null,
+  "instrumentation": "8 voice-host stages and separate Pocket4 monotonic endpoints; code tested, not live validated",
+  "npu": {
+    "hardware": "Pocket4 Ryzen AI 9 HX 370 XDNA2 aie2p 6x8",
+    "device": "/dev/accel/accel0",
+    "driver": "amdxdna kernel7.0.0-38-generic",
+    "firmware": "1.1.2.64",
+    "xrt": "2.25.37",
+    "original_memlock_bytes": 8388608,
+    "xrt_failed_mapping_bytes": 67108864,
+    "process_scoped_limit_fix": true,
+    "global_limits_changed": false,
+    "driver_changed": false,
+    "gemm_int8_reported_tops": 51.0,
+    "gemm_status": "PASSED",
+    "flm_version": "1.0.7",
+    "flm_package_sha256": "0b4913f089046b31cabb565541f769250710bf70470dbfe891a02437a5ed9c71",
+    "flm_stack_validate_ready": true,
+    "runtime_extracted_not_system_installed": true,
+    "model_revision": "594eecd2d80b20cbb04ef0099162335d1dd1899a",
+    "model_sha256": "8fb97604bf5762ee26efa696cfc9eb70724110358c7b4ca628a7973bf8a16291",
+    "real_whisper_npu_inference": true,
+    "process_hardware_evidence": [
+      {
+        "pid": 437387,
+        "npu_fds": [
+          "/dev/accel/accel0"
+        ],
+        "maps_whisper_npu": true
+      }
+    ],
+    "api_latency_seconds": {
+      "samples": 18,
+      "min": 2.0806151979995775,
+      "median": 2.2037363190011092,
+      "max": 2.521109239998623
+    },
+    "audio_length_seconds": [
+      1.242375,
+      2.531
+    ],
+    "normalized_exact": 6,
+    "character_edits": 42,
+    "reference_characters": 165,
+    "existing_sensevoice_baseline": {
+      "host": "qian-qi",
+      "device": "cpu",
+      "unique_samples": 6,
+      "median_seconds": 0.1949361324950587,
+      "min_seconds": 0.15116609699907713,
+      "max_seconds": 0.2435075319954194,
+      "normalized_exact": 3,
+      "not_hardware_only_comparison": true
+    },
+    "selected_for_production": false,
+    "reason": "short-utterance latency and transcript quality did not improve the existing deployed-candidate configuration",
+    "full_voice_latency_cancel_and_parallel_tests": "not_executed; basic ASR gate failed",
+    "active_processes_after_probe": [],
+    "finished_at": "2026-10-09T08:45:44.812806+09:00"
+  },
+  "voice_unit_tests_passed": 69,
+  "samples": [
+    {
+      "reference": "三加五等于八。",
+      "npu_transcript": "大家有得愈吧",
+      "sensevoice_transcript": "三加五等于八",
+      "npu_seconds": 2.3871378889998596,
+      "sensevoice_seconds": 0.15116609699907713
+    },
+    {
+      "reference": "请把时间改成明天下午四点半。",
+      "npu_transcript": "请把时间在成明天下午4点吧",
+      "sensevoice_transcript": "行把时间改成明天下午四点半",
+      "npu_seconds": 2.1526870210000197,
+      "sensevoice_seconds": 0.2385588339966489
+    },
+    {
+      "reference": "订单号码是零七零四。",
+      "npu_transcript": "引操号码是0704",
+      "sensevoice_transcript": "影单号码是零七零四",
+      "npu_seconds": 2.1764515729992127,
+      "sensevoice_seconds": 0.19941906299209222
+    },
+    {
+      "reference": "不是六点，是七点。",
+      "npu_transcript": "56点17年",
+      "sensevoice_transcript": "五十六点十七年",
+      "npu_seconds": 2.177096638999501,
+      "sensevoice_seconds": 0.19045320199802518
+    },
+    {
+      "reference": "工具超时，结果尚未确认。",
+      "npu_transcript": "工具超时,结果尚未确认。",
+      "sensevoice_transcript": "工具超时结果尚未确认",
+      "npu_seconds": 2.3908330080012092,
+      "sensevoice_seconds": 0.2435075319954194
+    },
+    {
+      "reference": "我是人工智能语音助理。",
+      "npu_transcript": "我是人工智能语音助理",
+      "sensevoice_transcript": "我是人工智能语音助理",
+      "npu_seconds": 2.269785974000115,
+      "sensevoice_seconds": 0.1780182960064849
+    }
+  ],
+  "limits": [
+    "Synthetic Melo audio at8kHz, no actual caller recording.",
+    "Repeated18 trials are only6 distinct inputs, not a production accuracy corpus orP95.",
+    "Different models and machines; compares candidate service paths, not NPU versusCPU hardware in isolation.",
+    "Existing synthesis/recognition also failed some samples; failure cannot be assigned solely to NPU hardware.",
+    "No real telephone audio handoff or AI dial/answer performed.",
+    "NPU timing is HTTP plus file processing; SenseVoice timing is decoded-PCM function call. Boundaries are not identical."
+  ]
+}

@@ -14,6 +14,7 @@ from .lease import Lease
 from .models import Models
 from .pipeline import State,build
 from .llama_client import verify_engine_properties
+from .timing import CLOCK_ID
 
 def read_wav(raw):
     with wave.open(io.BytesIO(raw)) as w:
@@ -122,6 +123,10 @@ async def main():
                             if r['duplicate']:await state.emit({'type':'duplicate','id':rid,'status':r['status']});continue
                             f=TranscriptionFrame(text,'local',time_now_iso8601(),finalized=True);f.metadata['request_id']=rid
                             await worker.queue_frame(f)
+                        elif typ=='input_end_marker':
+                            state.input_end_ingress_ns=time.monotonic_ns()
+                        elif typ=='clock_probe':
+                            await state.emit({'type':'clock_probe','clock_id':CLOCK_ID,'server_monotonic_ns':time.monotonic_ns()})
                         elif typ=='interrupt':await worker.queue_frame(InterruptionFrame())
                         elif typ=='end':break
                         else:raise Rejected('unsupported_message')

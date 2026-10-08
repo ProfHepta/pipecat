@@ -17,6 +17,7 @@ from .services import SenseVoiceSTTService,MeloTTSService
 from .transport import PocketPCMTransport
 from .speech_policy import enforce,spoken_form
 from .tool_client import execute
+from .timing import StageTimeline
 
 class ClosedFunctionSchema(FunctionSchema):
     def to_default_dict(self):
@@ -28,6 +29,7 @@ class ClosedFunctionSchema(FunctionSchema):
 class State:
     def __init__(self,ws,ledger):
         self.ws=ws;self.ledger=ledger;self.closed=False;self.send_lock=asyncio.Lock()
+        self.trace=None;self.pending_trace=None;self.input_end_ingress_ns=None
         self.pending=None;self.active=None;self.text='';self.safe_text='';self.started=0;self.llm_first_token_seconds=None;self.llm_complete_seconds=None
         self.epoch=0;self.audio_frames=0;self.first_audio=None;self.receipt=None;self.tool_failed=False;self.tool_calls=0;self.tool_waiting=False
     async def emit(self,event):
@@ -37,14 +39,17 @@ class State:
         result=self.ledger.reserve(rid,'speech',{'scope':'voice-r2','text':text})
         if not result['duplicate']:
             if self.pending:self.ledger.finish(self.pending[0],'interrupted')
-            self.pending=(rid,text)
+            self.pending=(rid,text);self.pending_trace=StageTimeline(rid)
         return result
     def cancel_active(self):
         if self.active:self.ledger.finish(self.active,'interrupted')
+        self.trace=None
         self.active=None;self.safe_text='';self.receipt=None;self.tool_failed=False;self.tool_waiting=False
     def begin(self):
         if self.pending:
+            trace=self.pending_trace
             self.cancel_active();self.active,self.text=self.pending;self.pending=None
+            self.trace=trace;self.pending_trace=None
             self.started=time.monotonic();self.first_audio=None;self.audio_frames=0;self.tool_calls=0;self.llm_first_token_seconds=None;self.llm_complete_seconds=None
         self.safe_text=''
 
@@ -57,6 +62,8 @@ class Admission(FrameProcessor):
             rid=frame.metadata.get('request_id')
             if rid is None:
                 rid=uuid.uuid4().hex;self.state.reserve(rid,frame.text)
+            if self.state.pending_trace:
+                for key,ns in frame.metadata.get('hepta_stages_ns',{}).items():self.state.pending_trace.mark(key,ns)
             await self.state.emit({'type':'transcript_final','text':frame.text,'id':rid,'recognizer':'sensevoice'})
         await self.push_frame(frame,direction)
 
@@ -69,6 +76,7 @@ class AuthorityGuard(FrameProcessor):
             self.buffer='';self.state.cancel_active();await self.push_frame(frame,direction)
         elif isinstance(frame,LLMFullResponseStartFrame):
             self.state.begin();self.buffer='';self.state.tool_waiting=False
+            if self.state.trace:self.state.trace.mark('llm_start')
             if self.state.active:await self.state.emit({'type':'turn_started','id':self.state.active,'epoch':self.state.epoch})
             await self.push_frame(frame,direction)
         elif isinstance(frame,FunctionCallsStartedFrame):
@@ -77,6 +85,7 @@ class AuthorityGuard(FrameProcessor):
         elif isinstance(frame,LLMTextFrame):
             if frame.text and self.state.llm_first_token_seconds is None:
                 self.state.llm_first_token_seconds=time.monotonic()-self.state.started
+                if self.state.trace:self.state.trace.mark('llm_first_token')
             self.buffer+=frame.text
             if len(self.buffer)>1600:raise ValueError('llm_response_limit')
         elif isinstance(frame,LLMFullResponseEndFrame):
@@ -95,6 +104,7 @@ class AuthorityGuard(FrameProcessor):
             if any(x in reply for x in ('<think>','<tool_call>','<|im_')):reply='模型输出不符合语音要求，这次回复未执行任何操作。'
             if reply:
                 self.state.llm_complete_seconds=time.monotonic()-self.state.started
+                if self.state.trace:self.state.trace.mark('reply_validated')
                 self.state.safe_text=reply
                 await self.push_frame(LLMTextFrame(spoken_form(reply)))
             await self.push_frame(frame,direction)
@@ -109,7 +119,7 @@ class ReceiptObserver(FrameProcessor):
             if s.active and s.safe_text and s.audio_frames:
                 s.ledger.finish(s.active,'done',{'audio_generated':True,'delivery':'frames_sent_not_human_confirmed','framework':'pipecat-1.12.0'})
                 await s.emit({'type':'turn_done','id':s.active,'epoch':s.epoch,'text':s.safe_text,
-                  'first_audio_seconds':s.first_audio-s.started if s.first_audio else None,'audio_frames':s.audio_frames,'llm_first_token_seconds':s.llm_first_token_seconds,'llm_complete_seconds':s.llm_complete_seconds})
+                  'first_audio_seconds':s.first_audio-s.started if s.first_audio else None,'audio_frames':s.audio_frames,'llm_first_token_seconds':s.llm_first_token_seconds,'llm_complete_seconds':s.llm_complete_seconds,'timeline':s.trace.snapshot() if s.trace else None})
                 s.active=None
         if isinstance(frame,ErrorFrame):await self.state.emit({'type':'error','code':'pipecat_error','detail':str(frame.error)[:160]})
         await self.push_frame(frame,direction)
@@ -134,7 +144,7 @@ def build(state,models):
         except Exception:
             state.tool_failed=True;await params.result_callback({'status':'failed','result':None})
     llm.register_function('telephone_status',telephone_status,cancel_on_interruption=True)
-    pipeline=Pipeline([transport.input(),SenseVoiceSTTService(models),Admission(state),user,llm,
-       AuthorityGuard(state),MeloTTSService(models),transport.output(),ReceiptObserver(state),assistant])
+    pipeline=Pipeline([transport.input(),SenseVoiceSTTService(models,state),Admission(state),user,llm,
+       AuthorityGuard(state),MeloTTSService(models,state),transport.output(),ReceiptObserver(state),assistant])
     worker=PipelineWorker(pipeline,params=PipelineParams(audio_in_sample_rate=16000,audio_out_sample_rate=16000),idle_timeout_secs=180)
     return transport,worker,WorkerRunner(handle_sigint=False),context

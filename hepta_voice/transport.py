@@ -28,7 +28,9 @@ class PCMOutput(BaseOutputTransport):
     async def write_audio_frame(self,frame):
         if self.state.closed:return False
         self.state.audio_frames+=1
-        if self.state.first_audio is None:self.state.first_audio=time.monotonic()
+        if self.state.first_audio is None:
+            self.state.first_audio=time.monotonic()
+            if self.state.trace:self.state.trace.mark('audio_first_sent')
         await self.state.emit({'type':'audio','epoch':self.state.epoch,'pcm':base64.b64encode(frame.audio).decode(),'sample_rate':frame.sample_rate})
         await asyncio.sleep(len(frame.audio)/(frame.sample_rate*frame.num_channels*2))
         return True

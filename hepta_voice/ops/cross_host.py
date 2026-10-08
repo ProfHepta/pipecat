@@ -31,6 +31,7 @@ async def main():
                             b=base64.b64decode(e['pcm'],validate=True)
                             if len(b)>320 or len(b)%2:raise ValueError('bad_remote_frame')
                             await ws.send_bytes(b)
+                        elif e['type']=='input_end_marker':await ws.send_json({'type':'input_end_marker'})
                         elif e['type']=='endpoint_receipt':receipt=e;return
                         elif e['type']=='endpoint_error':raise RuntimeError(e.get('code'))
                 sender=asyncio.create_task(uplink())
