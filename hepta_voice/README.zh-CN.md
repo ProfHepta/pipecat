@@ -1,0 +1,65 @@
+# Hepta Local Voice — Pipecat 适配层
+
+本目录建立在 Pipecat **v1.12.0 / 1559a684b1ee9771b36454b72418d7364b518e7f** 上。运行依赖固定到 `requirements.lock`；当前使用发行版 wheel 提供完整 Python 包和内置 Silero/Smart Turn 模型，而不是从不完整的稀疏检出中直接导入。
+
+## 范围
+
+使用上游 `Pipeline`、`PipelineWorker`、`WorkerRunner`、`LLMContextAggregatorPair`、Silero VAD、Local Smart Turn、原生 `OLLamaLLMService`、函数调用与 `BaseInputTransport` / `BaseOutputTransport`。本目录只提供本地模型、PCM端点、输出权限和持久请求收据适配。
+
+`SenseVoiceSTTService` 继承原生分段 STT 服务，`MeloTTSService` 继承原生 TTS 服务。不使用云端识别、合成或推理。对话回复先经权限检查，再进入 TTS；不能把该模式称为逐 token 到声音的无缓冲管线。
+
+只暴露 `telephone_status` 固定只读工具，实际执行既有 Pocket4 电话诊断。不允许模型指定命令、主机、电话号码，不接听、不拨号、不发短信、不进行交易、预约或支付。未知参数会拒绝，不能通过丢弃参数或补造收据绕过。
+
+**这是实验适配，不是获得生产放行的电话助理。** `production_ready=false`、`phone_authority=false`、`microphone_open=false`。所有音频验证输入均为合成样例，没有替换现有人工通话音频路由。现有 ModemManager / PipeWire 电话守护及其设备校验保持原样。
+
+## 目录和运行边界
+
+默认数据目录为 `~/.local/share/hepta-pipecat`，可用 `HEPTA_VOICE_DATA` 显式指定。源码与数据分离，数据目录**绝不能提交 Git**：
+
+- `models/`：原有 Qwen3 4B Instruct、SenseVoice、Melo 全精度模型及许可证。
+- `state/`：权限0700；原请求账本、鉴权凭证、Unix sockets。迁移保留旧 `voice-r2` 请求摘要格式；崩溃中的未知结果不能清账重放。
+- `fixtures/`：已验证的合成音频输入。
+- `runtime/` 和 `venv/`：私有 CPU Ollama 运行库与固定依赖环境。
+- `evidence/`：本机验收收据，与源码分离。
+
+`ops/run-cpu.sh` 使用固定镜像、本地权重，容器 `network=none`、只读根、无 GPU、无音频设备，限制4CPU/6GiB。模型内部只访问自身 loopback；宿主侧工具代理只执行固定 SSH 只读诊断。原默认 Ollama 与 H3 不受管理。
+
+**语音 GPU 保持停用。** 当前 CPU 路径用于迁移正确性验收，不承诺满足实时电话响应目标；GPU 不能因迁移自动重新启用。
+
+## 启动与验证
+
+这些命令针对已经迁移资产的本机环境，不是包含权重的一键安装包。初次安装需要事先准备清单中已固定的模型和 CPU 运行库。不要重新下载/创建账本冒充已保留的原始请求状态。
+
+```bash
+python -m pip install -r hepta_voice/requirements.lock
+python -m pytest hepta_voice/tests
+python hepta_voice/ops/install_units.py
+systemctl --user start hepta-pipecat-tools.service
+systemctl --user start hepta-pipecat.service
+python hepta_voice/ops/acceptance.py
+systemctl --user stop hepta-pipecat.service
+```
+
+安装脚本不会启用模型开机自启。服务鉴权凭证保存在本机 `state/access.token`，不得把它打印到日志或分发给 Pocket4。启动前保留单一所有者锁；锁不是电话音频交接的完成证明。
+
+`ops/cross_host.py` 通过已有严格主机密钥验证的 SSH，将 Pocket4 合成输入送入 Pipecat，再把输出帧送回；对比实际两端的哈希。它不是实际电话或真人听感验收。
+
+`ops/tool_failure.py` 只对新建只读工具代理做有界失联测试，并在 finally 中恢复；不会停止 ModemManager、交易或电话守护。
+
+## 迁移验收与剩余边界
+
+本地收据区分上游组件运行、模型质量、传输延迟、真实电话和真人听感。没有任何自动评分替代真人电话验收。仍需关闭的项包括：CPU/所选计算节点的实际延迟、电话人工/AI媒体独占交接、真实入呼/外呼对端验证及被授权的业务写操作。不能通过关闭日志或弱化断言伪造这些结果。
+
+旧 10000 尝试的防重记录保留在原 Pocket4 状态目录。本迁移不重置该记录，也不重新拨号。
+
+## 2026-10-09 本机迁移收据摘要
+
+本机60项控制/适配测试通过。实际运行了原生 Pipecat 文本对话、纠正、8k音频经 Silero/Smart Turn → SenseVoice → Ollama → Melo、只读函数调用、音频打断、跨连接去重。
+
+初次无参数工具调用产生了额外参数，按规则拒绝；随后补上封闭参数模式，并修正原生工具调用中间轮次尚未完成时不能提前播报的适配逻辑。首次失败收据未删除。
+
+CPU-only一组测试中，简单问答的客户端首帧为26.26秒和4.98秒；跨机合成音频最后一次为3.78秒、63帧、双向哈希一致。不是与旧GPU跑分的同条件比较，也不是P95或电话另一端听感。显式打断确认23.39毫秒，确认后旧帧0。不能因此认为实时延迟目标已经达标。
+
+只读工具代理失联时播报“结果尚未确认”，没有成功收据；代理恢复后取得真实诊断收据。清理旧目录和依赖缓存后，强制终止新模型容器，约14.10秒通过显式CPU-only启动恢复；原pending请求为unknown，同ID重提只返回duplicate，原本地测试记录仍只一条。
+
+旧自写语音项目、废弃模型和安装缓存已清理；原始账本、10000尝试记录、必要模型和轻量验收凭据保留。新模型服务不自动启用，GPU继续停用。

@@ -1,0 +1,11 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+*.sqlite3*
+*.token
+*.wav
+*.onnx
+*.gguf
+.venv/
+state/
+evidence/
