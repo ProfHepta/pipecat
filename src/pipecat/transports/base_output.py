@@ -16,6 +16,7 @@ import time
 from collections import deque
 from collections.abc import AsyncGenerator, Mapping
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import aclosing
 from typing import Any
 
 from loguru import logger
@@ -54,7 +55,7 @@ from pipecat.frames.frames import (
 from pipecat.pipeline.capabilities import BotCapabilities
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor, FrameProcessorSetup
 from pipecat.transports.base_transport import TransportParams
-from pipecat.utils.frame_queue import FrameQueue
+from pipecat.utils.frame_queue import FramePriorityQueue, FrameQueue
 from pipecat.utils.time import nanoseconds_to_seconds
 
 BOT_VAD_STOP_SECS = 0.35
@@ -537,6 +538,8 @@ class BaseOutputTransport(FrameProcessor):
                 frame: The start frame containing initialization parameters.
             """
             self._clear_audio_buffer()
+            self._audio_queue = FrameQueue()
+            self._clock_queue = FramePriorityQueue(frame_getter=lambda item: item[2])
 
             # Create all tasks.
             self._create_video_task()
@@ -609,28 +612,24 @@ class BaseOutputTransport(FrameProcessor):
             Args:
                 _: The start interruption frame (unused).
             """
-            # Cancel tasks.
-            await self._cancel_clock_task()
+            self._audio_queue.reset()
+            self._clock_queue.reset()
+
+            # Tasks recreated below deliver the uninterruptible frames reset() kept.
+            if not self._clock_queue.current_uninterruptible:
+                await self._cancel_clock_task()
             await self._cancel_video_task()
 
-            if self._audio_queue.has_uninterruptible or self._mixer:
-                # Keep the audio task running but drain all interruptible frames
-                # so the pending uninterruptible ones are still delivered. With
-                # a mixer, cancelling the task would also stop mixer-only output
-                # during the restart, causing an audible gap in the background
-                # audio (made worse by telephony serializers that clear the
-                # playout buffer on interruptions).
-                self._audio_queue.reset()
-            else:
+            # A mixer must keep running to avoid gaps in background audio.
+            if not (self._audio_queue.current_uninterruptible or self._mixer):
                 await self._cancel_audio_task()
-                self._create_audio_task()
 
-            # Create tasks.
+            self._create_audio_task()
             self._create_video_task()
             self._create_clock_task()
 
             # Let's send a bot stopped speaking if we have to.
-            await self._bot_stopped_speaking()
+            await self._bot_stopped_speaking(preserve_uninterruptible=True)
 
         async def handle_audio_frame(self, frame: OutputAudioRawFrame):
             """Handle incoming audio frames by buffering and chunking.
@@ -724,7 +723,6 @@ class BaseOutputTransport(FrameProcessor):
         def _create_audio_task(self):
             """Create the audio processing task."""
             if not self._audio_task:
-                self._audio_queue = FrameQueue()
                 self._audio_task = self._transport.create_task(self._audio_task_handler())
 
         async def _cancel_audio_task(self):
@@ -830,20 +828,21 @@ class BaseOutputTransport(FrameProcessor):
             frame.interruptible = not uninterruptible
             await self._audio_queue.put(frame)
 
-        async def _bot_stopped_speaking(self):
-            """Handle bot stopped speaking event."""
+        async def _bot_stopped_speaking(self, *, preserve_uninterruptible: bool = False):
+            """Handle bot stopped speaking, retaining uninterruptible audio when requested."""
             if not self._bot_speaking:
                 return
 
             self._bot_speaking = False
             self._tts_audio_received = False
 
-            # Any remaining leftover here (e.g. from an interruption) is
-            # discarded rather than flushed, since it's no longer wanted. The
-            # same goes for the audio still inside the resampler, which would
-            # otherwise be prepended to whatever the bot says next.
-            self._clear_audio_buffer()
-            await self._resampler.reset()
+            # Protected partial chunks still belong to ongoing speech.
+            if preserve_uninterruptible:
+                self._audio_runs = deque((audio, flag) for audio, flag in self._audio_runs if flag)
+            else:
+                self._clear_audio_buffer()
+            if not self._audio_runs:
+                await self._resampler.reset()
 
             logger.debug(
                 f"Bot{f' [{self._destination}]' if self._destination else ''} stopped speaking"
@@ -950,10 +949,12 @@ class BaseOutputTransport(FrameProcessor):
                         frame = await asyncio.wait_for(
                             self._audio_queue.get(), timeout=vad_stop_secs
                         )
-                        await self._filter_audio(frame)
-                        self._apply_volume(frame)
-                        yield frame
-                        self._audio_queue.task_done()
+                        try:
+                            await self._filter_audio(frame)
+                            self._apply_volume(frame)
+                            yield frame
+                        finally:
+                            self._audio_queue.task_done()
                     except TimeoutError:
                         # Fallback: notify the bot stopped speaking upstream if necessary based on timeout.
                         await self._bot_stopped_speaking()
@@ -1010,36 +1011,37 @@ class BaseOutputTransport(FrameProcessor):
 
         async def _audio_task_handler(self):
             """Main audio processing task handler."""
-            async for frame in self._next_frame():
-                # No need to push EndFrame, it's pushed from process_frame().
-                if isinstance(frame, EndFrame):
-                    # Send some final silence so words don't cut out.
-                    await self._send_silence(self._params.audio_out_end_silence_secs)
-                    break
+            async with aclosing(self._next_frame()) as frames:
+                async for frame in frames:
+                    # No need to push EndFrame, it's pushed from process_frame().
+                    if isinstance(frame, EndFrame):
+                        # Send some final silence so words don't cut out.
+                        await self._send_silence(self._params.audio_out_end_silence_secs)
+                        break
 
-                # Skip frames with no audio data (e.g. filter is buffering).
-                if isinstance(frame, OutputAudioRawFrame) and not frame.audio:
-                    continue
+                    # Skip frames with no audio data (e.g. filter is buffering).
+                    if isinstance(frame, OutputAudioRawFrame) and not frame.audio:
+                        continue
 
-                # Handle frame.
-                await self._handle_frame(frame)
+                    # Handle frame.
+                    await self._handle_frame(frame)
 
-                # If we are not able to write to the transport we shouldn't
-                # push downstream.
-                push_downstream = True
+                    # If we are not able to write to the transport we shouldn't
+                    # push downstream.
+                    push_downstream = True
 
-                # Try to send audio to the transport.
-                try:
-                    if isinstance(frame, OutputAudioRawFrame):
-                        push_downstream = await self._internal_write_audio_frame(frame)
-                except Exception as e:
-                    logger.error(f"{self} Error writing {frame} to transport: {e}")
-                    push_downstream = False
+                    # Try to send audio to the transport.
+                    try:
+                        if isinstance(frame, OutputAudioRawFrame):
+                            push_downstream = await self._internal_write_audio_frame(frame)
+                    except Exception as e:
+                        logger.error(f"{self} Error writing {frame} to transport: {e}")
+                        push_downstream = False
 
-                # If we were able to send to the transport, push the frame
-                # downstream in case anyone else needs it.
-                if push_downstream:
-                    await self._transport.push_frame(frame)
+                    # If we were able to send to the transport, push the frame
+                    # downstream in case anyone else needs it.
+                    if push_downstream:
+                        await self._transport.push_frame(frame)
 
         async def _internal_write_audio_frame(self, frame: OutputAudioRawFrame) -> bool:
             """Write a frame to the transport, giving up if the write never returns.
@@ -1186,7 +1188,6 @@ class BaseOutputTransport(FrameProcessor):
         def _create_clock_task(self):
             """Create the clock/timing processing task."""
             if not self._clock_task:
-                self._clock_queue = asyncio.PriorityQueue()
                 self._clock_task = self._transport.create_task(self._clock_task_handler())
 
         async def _cancel_clock_task(self):
@@ -1201,19 +1202,14 @@ class BaseOutputTransport(FrameProcessor):
             while running:
                 timestamp, _, frame = await self._clock_queue.get()
 
-                # If we hit an EndFrame, we can finish right away.
-                running = not isinstance(frame, EndFrame)
-
-                # If we have a frame we check it's presentation timestamp. If it
-                # has already passed we process it, otherwise we wait until it's
-                # time to process it.
-                if running:
-                    current_time = self._transport.get_clock().get_time()
-                    if timestamp > current_time:
-                        wait_time = nanoseconds_to_seconds(timestamp - current_time)
-                        await asyncio.sleep(wait_time)
-
-                    # Push frame downstream.
-                    await self._transport.push_frame(frame)
-
-                self._clock_queue.task_done()
+                try:
+                    # EndFrame has no presentation timestamp to wait for.
+                    running = not isinstance(frame, EndFrame)
+                    if running:
+                        current_time = self._transport.get_clock().get_time()
+                        if timestamp > current_time:
+                            wait_time = nanoseconds_to_seconds(timestamp - current_time)
+                            await asyncio.sleep(wait_time)
+                        await self._transport.push_frame(frame)
+                finally:
+                    self._clock_queue.task_done()

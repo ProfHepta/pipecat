@@ -31,6 +31,7 @@ from pipecat.frames.frames import (
     StartFrame,
     TTSAudioRawFrame,
     TTSStoppedFrame,
+    TTSTextFrame,
     VolumeFrame,
     VolumeGainFrame,
 )
@@ -121,6 +122,62 @@ async def _make_transport(
 class TestBaseOutputTransportInterruptions(unittest.IsolatedAsyncioTestCase):
     async def _make_transport(self, mixer: BaseAudioMixer | None = None) -> BaseOutputTransport:
         return await _make_transport(mixer)
+
+    async def test_protected_audio_write_finishes_after_interruption(self):
+        transport = await self._make_transport()
+        entered = asyncio.Event()
+        release = asyncio.Event()
+        finished = asyncio.Event()
+
+        async def write(frame):
+            entered.set()
+            await release.wait()
+            finished.set()
+            return True
+
+        transport.write_audio_frame.side_effect = write
+        try:
+            sender = transport._media_senders[None]
+            frame = TTSAudioRawFrame(b"\x01" * sender.audio_chunk_size, sender.sample_rate, 1)
+            frame.interruptible = False
+            await transport.process_frame(frame, FrameDirection.DOWNSTREAM)
+            await asyncio.wait_for(entered.wait(), timeout=1)
+            await transport.process_frame(InterruptionFrame(), FrameDirection.DOWNSTREAM)
+            release.set()
+            await asyncio.wait_for(finished.wait(), timeout=1)
+        finally:
+            release.set()
+            await transport.cancel(CancelFrame())
+
+    async def test_interruption_preserves_waiting_and_queued_protected_text(self):
+        for protect_current in (False, True):
+            with self.subTest(protect_current=protect_current):
+                transport = await self._make_transport()
+                try:
+                    sender = transport._media_senders[None]
+                    now = transport.get_clock().get_time()
+                    first = TTSTextFrame("first", "sentence")
+                    first.interruptible = not protect_current
+                    first.pts = now + 100_000_000
+                    kept = TTSTextFrame("kept", "sentence")
+                    kept.interruptible = False
+                    kept.pts = now + 120_000_000
+                    dropped = TTSTextFrame("dropped", "sentence")
+                    dropped.pts = now + 130_000_000
+                    for frame in (first, kept, dropped):
+                        await transport.process_frame(frame, FrameDirection.DOWNSTREAM)
+                    await asyncio.sleep(0.01)
+                    self.assertEqual(sender._clock_queue.current_uninterruptible, protect_current)
+                    await transport.process_frame(InterruptionFrame(), FrameDirection.DOWNSTREAM)
+                    await asyncio.wait_for(sender._clock_queue.join(), timeout=1)
+                    delivered = [
+                        call.args[0].text
+                        for call in transport.push_frame.call_args_list
+                        if isinstance(call.args[0], TTSTextFrame)
+                    ]
+                    self.assertEqual(delivered, ["first", "kept"] if protect_current else ["kept"])
+                finally:
+                    await transport.cancel(CancelFrame())
 
     async def test_interruption_with_mixer_keeps_audio_task_and_mixer_output(self):
         transport = await self._make_transport(mixer=_PassthroughMixer())
