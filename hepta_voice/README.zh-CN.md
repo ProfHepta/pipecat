@@ -1,3 +1,19 @@
+## 2026-10-09 最新验收门槛（已核验，尚未正式接管）
+
+Pocket4固定Vulkan/FA GPU引擎的真实PID/启动身份/GPU FD/摘要与本机健康接口再次验证通过，qian-qi真实`llama.key`与`llama.sock`仍缺，平台此前禁止跨机凭据/转发配置，本轮没有绕行。同步Pocket4最新版合成PCM客户端并实际验收远端首帧2427ms（模拟LLM而非真实GPU），63帧、哈希一致、旧帧0。新增严格只读引擎身份验证和`ops/real_gpu_acceptance.py`，要求正式私有SSH Unix连接具备条件后才允许真实GPU验收；缺key时已按预期拒绝且没有启动Pipecat。当前109项单元测试通过，生产/电话资格未变。
+
+---
+
+## 2026-10-09 最新：GPU进程身份复核＋跨机合成音频验收
+
+**仍未完成正式GPU→Pipecat接线。** Pocket4上的固定Vulkan/FA引擎已通过在线进程启动身份、进程参数、GPU FD、本地认证健康接口与引擎/模型摘要核对；这一检查不复制或显示引擎凭据。qian-qi缺`state/llama.key`与`state/llama.sock`，因既有平台安全检查拒绝凭据/转发配置，没有变换方式绕过。
+
+已找到并修正Pocket4上的旧版合成测试客户端：当前源端与已验收仓库脚本SHA256一致，输入结束标记能够真实发出。使用**独立模拟LLM**（不是GPU）实测Pocket4合成音频→qian-qi真实SenseVoice/Pipecat/Melo→Pocket4返回音频，Pocket4同机首音为**2.437秒**、qian-qi本机对应阶段为**2.433秒**、63帧、双向SHA一致、旧帧0；两台单调时钟不交叉相减。报告见`benchmarks/mock-cross-host-20261009.json`。
+
+新增`deploy/attest_pocket_engine.py`与`ops/real_gpu_acceptance.py`：在正式凭据和受限SSH Unix socket已获准部署后，才验证真实GPU进程身份和固定配置、实际Pipecat合成语音、取消去重与工具故障回归。运行前门槛未满足会停止且不启动Pipecat。本轮现场运行确实在缺少真实key时**拒绝**，没有产生假GPU首音。当前**109项单元测试通过**，无电话接管或自动接听。
+
+---
+
 ## 2026-10-09：接线前安全与合成整链路验收
 
 新增加密凭据/Unix socket 文件类型与权限的拒绝检查、认证Unix socket流式客户端测试、跨主机双时钟首音收据校验。合计 **88项单元测试通过**。网络隔离中以真正 SenseVoice + Pipecat + Melo 和**模拟LLM**完成63帧音频输出；最后一轮输入结束到第一帧为 **2.226秒**（前一轮2.311秒），只能证明不依赖真实GPU的语音链路和埋点。对应源码与不含秘密的收据见 `ops/mock_uds_audio_acceptance.py`、`benchmarks/mock-uds-audio-20261009.json`、`CONNECTION_GATE_20261009.md`。

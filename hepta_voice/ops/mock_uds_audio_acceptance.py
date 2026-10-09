@@ -32,6 +32,8 @@ async def main():
     state = tmp / "state"
     state.mkdir(mode=0o700)
     (tmp / "models").symlink_to(DATA / "models", target_is_directory=True)
+    (tmp / "fixtures").symlink_to(DATA / "fixtures", target_is_directory=True)
+    (tmp / "evidence").mkdir(mode=0o700)
     fake_key = "synthetic-test-only-" + secrets.token_hex(32)
     api_key = secrets.token_hex(32)
     (state / "llama.key").write_text(fake_key)
@@ -196,6 +198,38 @@ async def main():
                     "human_listened": False,
                 })
                 await ws.send_json({"type": "end"})
+        # Independently test actual Pocket4 synthetic PCM over pinned-host-key
+        # SSH stdio. The LLM is still the isolated FAKE Unix socket fixture;
+        # this cannot qualify the live GPU or a real telephone call.
+        await asyncio.sleep(0.8)
+        env = {**os.environ, "HEPTA_VOICE_DATA": str(tmp)}
+        cross_proc = await asyncio.create_subprocess_exec(
+            str(DATA / "venv/bin/python"), "-m", "hepta_voice.ops.cross_host",
+            cwd=str(ROOT), env=env, stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            cross_out, cross_err = await asyncio.wait_for(cross_proc.communicate(), 150)
+        except asyncio.TimeoutError:
+            cross_proc.kill()
+            await cross_proc.wait()
+            raise RuntimeError("mock_cross_host_test_deadline")
+        if cross_proc.returncode != 0:
+            raise RuntimeError("mock_cross_host_failure:" + cross_err.decode(errors="replace")[-250:])
+        cross = json.loads((tmp / "evidence/pipecat-cross-host.json").read_text())
+        proof = cross["cross_host_first_audio"]
+        assert cross["sha256_both_directions_match"] and proof["clock_domains_kept_separate"]
+        assert not proof["end_to_end_gpu_verified"] and not proof["telephone_remote_audibility_verified"]
+        collected["cross_host_completed"] = True
+        collected["mock_cross_host"] = {
+            "remote": cross["remote"],
+            "synthetic_endpoint_first_audio_ms": proof["synthetic_endpoint_first_audio_ms"],
+            "voice_host_internal_first_audio_ms": proof["voice_host_internal_first_audio_ms"],
+            "audio_frames": cross["endpoint_receipt"]["audio_frames"],
+            "input_output_hashes_verified": cross["sha256_both_directions_match"],
+            "stale_frames": cross["endpoint_receipt"]["stale_frames"],
+            "actual_gpu": False, "actual_telephone": False,
+        }
         print(json.dumps({
             "completed": True, "audio_frames": audio_frames,
             "first_audio_ms": collected["same_host_input_end_to_first_audio_ms"],
@@ -203,6 +237,8 @@ async def main():
             "mock_engine": True,
         }, ensure_ascii=False), flush=True)
     except Exception as e:
+        collected["completed"] = False
+        collected["cross_host_completed"] = False
         collected["failure"] = {"type": type(e).__name__, "message": str(e)[:240]}
         try:
             collected["sandbox_log_tail"] = script_log.read_text()[-2400:]

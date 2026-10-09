@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-09",
+  "scope": "real Pocket4 SSH-stdio PCM -> qian-qi SenseVoice/Pipecat/Melo -> Pocket4 PCM",
+  "model_source": "synthetic authenticated AF_UNIX LLM SSE, not Pocket4 GPU",
+  "input": "pocket4 local 8kHz synthetic fixture",
+  "output": "pocket4 receives real synthesized 16kHz PCM",
+  "same_host_voice_internal_to_first_frame_ms": 2422.58,
+  "pocket4_synthetic_speech_end_to_first_frame_ms": 2427.259,
+  "audio_frames": 63,
+  "sha256_both_directions_match": true,
+  "stale_frames": 0,
+  "llm_requests_to_mock": 2,
+  "remote_host": "alex-G1628-04",
+  "different_host_monotonic_clocks_never_subtracted": true,
+  "gpu_inference_performed": false,
+  "full_real_gpu_voice_accepted": false,
+  "real_telephone_used": false,
+  "remote_human_audibility": false,
+  "note": "The GPU channel remains unconnected; this cannot qualify the live model or production.",
+  "last_mock_cross_host_retest_passed": true
+}
