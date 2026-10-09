@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 DATA=Path(os.environ.get('HEPTA_VOICE_DATA',str(Path.home()/'.local/share/hepta-pipecat'))).resolve()
 STATE=DATA/'state'
+# On Pocket4 the existing llama.cpp key is read in place; no duplicate credential.
+ENGINE_KEY_FILE=Path(os.environ.get('HEPTA_VOICE_ENGINE_KEY_FILE',str(STATE/'llama.key')))
 MODELS=DATA/'models'
 MODEL='hepta-qwen3-4b'
 LLAMA_URL='http://localhost/v1'

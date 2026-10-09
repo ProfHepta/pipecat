@@ -8,7 +8,7 @@ logger.remove();logger.add(sys.stderr,level="WARNING")
 from aiohttp import web,WSMsgType
 from pipecat.frames.frames import TranscriptionFrame,InputAudioRawFrame,InterruptionFrame
 from pipecat.utils.time import time_now_iso8601
-from .config import DATA,STATE,MODEL
+from .config import DATA,STATE,MODEL,ENGINE_KEY_FILE
 from .control import Ledger,Rejected,checked_id
 from .lease import Lease
 from .models import Models
@@ -34,12 +34,12 @@ def wav(pcm):
 async def main():
     os.umask(0o077);STATE.mkdir(parents=True,exist_ok=True)
     # No automatic fallback to the removed local Ollama backend.
-    validate_local_endpoint_files(STATE)
+    validate_local_endpoint_files(STATE,ENGINE_KEY_FILE)
     lease=Lease(STATE/'pipeline-owner.lock').acquire()
     token=(STATE/'access.token').read_text().strip()
     if len(token)<32:raise RuntimeError('invalid_auth_token')
     ledger=Ledger(STATE/'ledger.sqlite3');models=Models();busy=False
-    engine_key=(STATE/'llama.key').read_text().strip()
+    engine_key=ENGINE_KEY_FILE.read_text().strip()
     http=aiohttp.ClientSession(connector=aiohttp.UnixConnector(path=str(STATE/'llama.sock')),
         headers={'Authorization':'Bearer '+engine_key},timeout=aiohttp.ClientTimeout(total=30),trust_env=False)
     async with http.get('http://localhost/health') as r:

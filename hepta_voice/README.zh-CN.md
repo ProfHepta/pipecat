@@ -1,3 +1,9 @@
+## 2026-10-09 当前部署：全部语音服务在Pocket4，qian-qi不再提供推理/语音
+
+本地语音已迁到Pocket4（alex-G1628-04），固定llama.cpp Vulkan+FA GPU、同机私有Unix代理、只读蜂窝诊断、Pipecat/SenseVoice/Melo在rootless离线容器。四个用户服务均enabled/active，原请求账本已迁移并通过SQLite校验；真实Pocket4 GPU下合成音频首音连续5轮中位**1.962秒**。源代码与实际运行和恢复证据见`POCKET4_SINGLE_HOST_20261009.md`及`benchmarks/pocket4-single-host-20261009.json`。未开启真实电话接管或自动接听，不等于电话生产放行。以下历史qian-qi开发资料仅供追溯，不应作为当前部署配置。
+
+---
+
 ## 2026-10-09 最新验收门槛（已核验，尚未正式接管）
 
 Pocket4固定Vulkan/FA GPU引擎的真实PID/启动身份/GPU FD/摘要与本机健康接口再次验证通过，qian-qi真实`llama.key`与`llama.sock`仍缺，平台此前禁止跨机凭据/转发配置，本轮没有绕行。同步Pocket4最新版合成PCM客户端并实际验收远端首帧2427ms（模拟LLM而非真实GPU），63帧、哈希一致、旧帧0。新增严格只读引擎身份验证和`ops/real_gpu_acceptance.py`，要求正式私有SSH Unix连接具备条件后才允许真实GPU验收；缺key时已按预期拒绝且没有启动Pipecat。当前109项单元测试通过，生产/电话资格未变。

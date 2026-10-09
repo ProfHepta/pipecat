@@ -1,8 +1,9 @@
 """Local llama.cpp over an authenticated SSH Unix-socket relay; no cloud fallback."""
+from pathlib import Path
 import httpx2
 from openai import AsyncOpenAI
 from pipecat.services.openai.llm import OpenAILLMService
-from .config import STATE,MODEL,LLAMA_URL
+from .config import STATE,MODEL,LLAMA_URL,ENGINE_KEY_FILE
 
 def verify_engine_properties(props):
     if props.get('model_alias')!=MODEL:raise RuntimeError('engine_model_alias_mismatch')
@@ -14,7 +15,9 @@ def verify_engine_properties(props):
 class LocalLlamaService(OpenAILLMService):
     supports_developer_role=False
     def __init__(self,**kwargs):
-        key=(STATE/'llama.key').read_text().strip()
+        import os
+        key_file=Path(os.environ['HEPTA_VOICE_ENGINE_KEY_FILE']) if os.environ.get('HEPTA_VOICE_ENGINE_KEY_FILE') else STATE/'llama.key'
+        key=key_file.read_text().strip()
         if len(key)<32:raise RuntimeError('invalid_local_engine_key')
         super().__init__(api_key=key,base_url=LLAMA_URL,**kwargs)
     def create_client(self,api_key=None,base_url=None,**kwargs):

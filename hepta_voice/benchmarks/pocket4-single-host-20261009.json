@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-09",
+  "host": "alex-G1628-04",
+  "all_voice_services_pocket4": true,
+  "voice_framework": "pipecat-1.12.0",
+  "llm": "llama.cpp Vulkan FA-on Qwen3 4B Q4_K_M",
+  "model_sha256": "85e4a5b7b8ef0e48af0e8658f5aaab9c2324c76c1641493f4d1e25fce54b18b9",
+  "engine_commit": "d81235049384534c167caea52b85a694f6103d14",
+  "engine_binary_sha256": "5faf410bbbc00a1b94b09ee01623699f255365628dfa73b1ee552d9e52a2231d",
+  "engine_pid": 485362,
+  "engine_boot_id": "92ca4e24-86a8-4ec1-a6e3-b3a6aa7c201a",
+  "engine_start_ticks": "3311477",
+  "backend": "Vulkan",
+  "kv": "f16",
+  "context": 4096,
+  "slots": 1,
+  "image_id": "sha256:b725f5836d23e1388052104754effb598f05229da6df51181b5cdce06b5a4a2f",
+  "services": {
+    "hepta-pocket-llama.service": {
+      "ActiveState": "active",
+      "UnitFileState": "enabled",
+      "MainPID": "485318",
+      "NRestarts": "0"
+    },
+    "hepta-pocket-voice-proxy.service": {
+      "ActiveState": "active",
+      "UnitFileState": "enabled",
+      "MainPID": "584714",
+      "NRestarts": "0"
+    },
+    "hepta-pocket-voice-tools.service": {
+      "ActiveState": "active",
+      "UnitFileState": "enabled",
+      "MainPID": "584716",
+      "NRestarts": "0"
+    },
+    "hepta-pocket-voice-agent.service": {
+      "ActiveState": "active",
+      "UnitFileState": "enabled",
+      "MainPID": "602072",
+      "NRestarts": "1"
+    }
+  },
+  "synthetic_real_gpu_pcm": {
+    "passed": true,
+    "latest_ms": 2021.646,
+    "audio_frames": 63,
+    "reply": "三加五等于八。",
+    "recognized": "请用一句话回答三加五等于几",
+    "eight_timing_stages": true,
+    "stage_durations_ms": {
+      "ingress_end_to_final_transcript": 1365.791111,
+      "recognition_compute": 70.938063,
+      "transcript_to_llm_request": 15.917679,
+      "llm_time_to_first_token": 80.446243,
+      "llm_first_token_to_validated_reply": 179.309408,
+      "validation_to_first_synthesis_ready": 378.704295,
+      "synthesis_ready_to_first_frame_sent": 0.934296,
+      "ingress_end_to_first_frame_sent": 2021.103032
+    },
+    "warm_runs_ms": [
+      1993.264,
+      1928.829,
+      1961.954,
+      1960.442,
+      2010.633
+    ],
+    "warm_median_ms": 1961.954,
+    "warm_min_ms": 1928.829,
+    "warm_max_ms": 2010.633
+  },
+  "control_checks": {
+    "completed": true,
+    "authenticated_unix_only": true,
+    "network_none": true,
+    "read_only_phone_receipt": true,
+    "interrupt": {
+      "flush_ms": 2.9011299993726425,
+      "stale_frames_after_ack": 0
+    },
+    "dedup": {
+      "type": "duplicate",
+      "id": "434e01b5067b451e80c436c93f01b486",
+      "status": "done"
+    },
+    "unknown_policy": "超时只表示结果尚未确认，不能直接认定成功或失败。应该先核对原请求状态，不要盲目重试。",
+    "8khz_pipeline": true
+  },
+  "ledger": {
+    "sqlite_integrity": "ok",
+    "statuses": {
+      "done": 58,
+      "failed": 3,
+      "interrupted": 8,
+      "unknown": 4
+    },
+    "notes": 1,
+    "prior_migration_sha256": "1e4371565b382cdcea4847f71c7398f28c6c2eb9ae5bf00d0235334afac47f54"
+  },
+  "crash_recovery": {
+    "agent_restart_count": 1,
+    "agent_restarted_without_engine_restart": true,
+    "real_pcm_after_crash_passed": true
+  },
+  "telephone_incoming_outgoing_production_qualified": false,
+  "automatic_phone_answer_enabled": false,
+  "microphone_or_modem_mutated": false,
+  "qianqi_voice_services_needed": false,
+  "human_audibility_tested": false,
+  "verified_at": 1791510680.600745
+}

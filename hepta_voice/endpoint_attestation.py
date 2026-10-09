@@ -8,7 +8,7 @@ import stat
 from pathlib import Path
 
 
-def validate_local_endpoint_files(state: Path) -> None:
+def validate_local_endpoint_files(state: Path, key_file: Path | None = None) -> None:
     state = Path(state)
     directory = state.lstat()
     if not stat.S_ISDIR(directory.st_mode) or directory.st_uid != os.getuid():
@@ -16,7 +16,7 @@ def validate_local_endpoint_files(state: Path) -> None:
     if directory.st_mode & 0o077:
         raise RuntimeError('engine_state_directory_permissions')
 
-    key = state / 'llama.key'
+    key = Path(key_file) if key_file is not None else state / 'llama.key'
     socket_path = state / 'llama.sock'
     key_mode = key.lstat()
     sock_mode = socket_path.lstat()
