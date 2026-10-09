@@ -14,6 +14,7 @@ from .lease import Lease
 from .models import Models
 from .pipeline import State,build
 from .llama_client import verify_engine_properties
+from .endpoint_attestation import validate_local_endpoint_files
 from .timing import CLOCK_ID
 
 def read_wav(raw):
@@ -33,8 +34,7 @@ def wav(pcm):
 async def main():
     os.umask(0o077);STATE.mkdir(parents=True,exist_ok=True)
     # No automatic fallback to the removed local Ollama backend.
-    if not (STATE/'llama.key').is_file() or not (STATE/'llama.sock').exists():
-        raise RuntimeError('pocket4_llama_endpoint_not_installed')
+    validate_local_endpoint_files(STATE)
     lease=Lease(STATE/'pipeline-owner.lock').acquire()
     token=(STATE/'access.token').read_text().strip()
     if len(token)<32:raise RuntimeError('invalid_auth_token')

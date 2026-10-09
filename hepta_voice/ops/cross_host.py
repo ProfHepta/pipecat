@@ -4,6 +4,7 @@ SSH uses existing trust, no SSH configuration or host-key changes.
 import asyncio,base64,hashlib,json,sys,time,os
 from pathlib import Path
 import aiohttp
+from hepta_voice.acceptance_evidence import verify_synthetic_endpoint_receipt
 R=Path(os.environ.get('HEPTA_VOICE_DATA',str(Path.home()/'.local/share/hepta-pipecat')))
 async def main():
     proc=await asyncio.create_subprocess_exec('ssh','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes',
@@ -22,7 +23,7 @@ async def main():
             async with h.ws_connect('http://localhost/session') as ws:
                 assert (await ws.receive_json())['type']=='ready'
                 await ws.send_json({'type':'format','sample_rate':8000});await write({'type':'start'})
-                output=hashlib.sha256();frames=0;transcript=None;receipt=None
+                output=hashlib.sha256();frames=0;transcript=None;receipt=None;final_event=None
                 async def uplink():
                     nonlocal receipt
                     while True:
@@ -41,15 +42,19 @@ async def main():
                         if e['type']=='transcript_final':transcript=e['text']
                         if e['type']=='audio':output.update(base64.b64decode(e['pcm'],validate=True));frames+=1
                         if e['type'] in ('flush','audio','turn_done','error'):await write(e)
-                        if e['type'] in ('turn_done','error'):break
+                        if e['type']=='turn_done':final_event=e
+                        if e['type']=='error':raise RuntimeError('voice_pipeline_error:'+str(e))
+                        if e['type']=='turn_done':break
                     await asyncio.wait_for(sender,10);await ws.send_json({'type':'end'})
                 finally:
                     if not sender.done():sender.cancel()
                 if receipt is None:raise RuntimeError('missing_remote_receipt')
-                assert receipt['output_pcm_sha256']==output.hexdigest() and receipt['audio_frames']==frames
+                assert final_event is not None and receipt is not None
+                proof=verify_synthetic_endpoint_receipt(remote=receipt,voice_host=final_event,
+                    pcm_digest=output.hexdigest(),pcm_frames=frames,source_wav_digest=expected)
                 result={'scope':'Pipecat actual cross-host synthetic PCM; no hardware playback or telephone',
                     'remote':ready['hostname'],'transcript':transcript,'sha256_both_directions_match':True,
-                    'service_secret_copied':False,'endpoint_receipt':receipt,'checked_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
+                    'service_secret_copied':False,'endpoint_receipt':receipt,'cross_host_first_audio':proof,'checked_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
                 (R/'evidence/pipecat-cross-host.json').write_text(json.dumps(result,ensure_ascii=False,indent=2));print(json.dumps(result,ensure_ascii=False,indent=2))
     finally:
         if proc.stdin:proc.stdin.close()

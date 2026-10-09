@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-09",
+  "mode": "authenticated_synthetic_unix_socket_model",
+  "full_llm_gpu_test": false,
+  "telephone_test": false,
+  "result": "passed",
+  "source": "local network-none container + actual Pipecat/SenseVoice/Melo",
+  "models": {
+    "asr": "SenseVoice INT8 real CPU",
+    "tts": "Melo FP32 real CPU",
+    "llm": "fake SSE data, no GPU"
+  },
+  "text": "三加五等于八。",
+  "audio_frames": 63,
+  "endpoint_input_end_to_first_frame_ms": 2226.16,
+  "phase_durations_ms": {
+    "ingress_end_to_final_transcript": 1197.496594,
+    "recognition_compute": 276.35367,
+    "transcript_to_llm_request": 90.45374,
+    "llm_time_to_first_token": 115.697845,
+    "llm_first_token_to_validated_reply": 10.277275,
+    "validation_to_first_synthesis_ready": 805.869598,
+    "synthesis_ready_to_first_frame_sent": 5.397023,
+    "ingress_end_to_first_frame_sent": 2225.192075
+  },
+  "all_eight_monotonic_stages_observed": true,
+  "invalid_stages": [],
+  "credential_source": "ephemeral generated test token; no production engine key",
+  "left_running_services": false,
+  "release_status": "laboratory_only"
+}

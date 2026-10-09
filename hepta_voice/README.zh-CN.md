@@ -1,3 +1,11 @@
+## 2026-10-09：接线前安全与合成整链路验收
+
+新增加密凭据/Unix socket 文件类型与权限的拒绝检查、认证Unix socket流式客户端测试、跨主机双时钟首音收据校验。合计 **88项单元测试通过**。网络隔离中以真正 SenseVoice + Pipecat + Melo 和**模拟LLM**完成63帧音频输出；最后一轮输入结束到第一帧为 **2.226秒**（前一轮2.311秒），只能证明不依赖真实GPU的语音链路和埋点。对应源码与不含秘密的收据见 `ops/mock_uds_audio_acceptance.py`、`benchmarks/mock-uds-audio-20261009.json`、`CONNECTION_GATE_20261009.md`。
+
+正式 Pocket4 GPU 引擎仍在其本机运行，但跨机凭据和SSH Unix socket 接线因平台安全检查未获执行放行，**不能以模拟LLM结果代替真实GPU首音**。未执行真实电话测试，Pipecat仍处于停止、未自启状态。
+
+---
+
 ## 本轮新增记录：GPU接线仍阻塞，NPU候选实测不晋级
 
 详见 `NPU_TIMING_20261009.md`。新增首音分段埋点和69项单元测试；没有新的完整GPU首音成绩。Pocket4真实通过XRT GEMM和FastFlowLM栈验证，并完成Whisper NPU转写实验，但短句响应和质量未达到替换门槛。没有替换SenseVoice，也没有开启电话接管。
