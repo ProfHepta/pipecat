@@ -3,6 +3,7 @@ Native schedulers own output queues; the write hook models physical PCM pacing.
 No microphone or phone device is opened.
 """
 import asyncio,base64,time
+from pipecat.audio.resamplers.soxr_stream_resampler import SOXRStreamAudioResampler
 from pipecat.transports.base_transport import BaseTransport,TransportParams
 from pipecat.transports.base_input import BaseInputTransport
 from pipecat.transports.base_output import BaseOutputTransport
@@ -10,7 +11,20 @@ from pipecat.frames.frames import InputAudioRawFrame,InterruptionFrame
 from .control import checked_id
 
 class PCMInput(BaseInputTransport):
-    def __init__(self,params):super().__init__(params);self.ready=asyncio.Event()
+    def __init__(self,params):
+        super().__init__(params);self.ready=asyncio.Event()
+        self._resampler=SOXRStreamAudioResampler(quality='HQ',clear_after_secs=None)
+        self._wire_rate=None
+    async def push_audio_frame(self,frame):
+        if frame.num_channels!=1 or frame.sample_rate not in (8000,16000) or len(frame.audio)%2:
+            raise ValueError('invalid_input_pcm_format')
+        if self._wire_rate is not None and self._wire_rate!=frame.sample_rate:
+            raise ValueError('mid_session_sample_rate_change')
+        self._wire_rate=frame.sample_rate
+        # The PipelineWorker, segmented ASR, VAD and Smart Turn all consume 16k.
+        # BaseInputTransport does not resample frame.audio on our behalf.
+        pcm=await self._resampler.resample(frame.audio,frame.sample_rate,16000)
+        if pcm:await super().push_audio_frame(InputAudioRawFrame(pcm,16000,1))
     async def start(self,frame):
         await super().start(frame);await self.set_transport_ready(frame);self.ready.set()
 
