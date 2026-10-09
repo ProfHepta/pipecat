@@ -33,6 +33,24 @@ class GateClosed(RuntimeError):
     pass
 
 
+
+def pinned_ssh_forward(argv: list[str], path: Path) -> bool:
+    """Match a real SSH -L option; incidental argv text is not a forwarding rule."""
+    expected = str(path) + ':127.0.0.1:18455'
+    if 'pocket4' not in argv or '-N' not in argv:
+        return False
+    for index, arg in enumerate(argv):
+        if arg == '-L' and index + 1 < len(argv) and argv[index + 1] == expected:
+            return True
+        if arg.startswith('-L') and arg[2:] == expected:
+            return True
+        if arg == '-o' and index + 1 < len(argv) and argv[index + 1] == 'LocalForward=' + expected:
+            return True
+        if arg == '-oLocalForward=' + expected:
+            return True
+    return False
+
+
 def private_ssh_unix_listener(path: Path) -> dict:
     # SO_PEERCRED certifies who actually accepted the Unix connection, rather
     # than trusting a socket filename or an old systemd success message.
@@ -47,13 +65,10 @@ def private_ssh_unix_listener(path: Path) -> dict:
     binary = os.readlink(proc / "exe")
     if Path(binary).name != "ssh":
         raise GateClosed("unix_listener_not_ssh")
-    args = [x.decode(errors="replace") for x in (proc / "cmdline").read_bytes().split(b"\\0") if x]
-    expected = str(path) + ":127.0.0.1:18455"
-    # Require forwarding to the pre-existing Pocket4 loopback endpoint; do not
-    # accept dynamically provided URL or a listener bound to public IP.
-    if "pocket4" not in args or not any(
-        arg == expected or arg.endswith("=" + expected) for arg in args
-    ):
+    args = [x.decode(errors="replace") for x in (proc / "cmdline").read_bytes().split(bytes([0])) if x]
+    # An unrelated remote command mentioning a socket path must not count as
+    # a forwarding declaration. The remote host must still be host-key pinned.
+    if not pinned_ssh_forward(args, path):
         raise GateClosed("ssh_forwarding_target_not_pinned")
     return {"pid": pid, "owner_uid": uid, "authenticated_forward": True}
 
@@ -68,6 +83,8 @@ def active(unit: str) -> bool:
 def start_stop(unit: str, verb: str):
     if unit not in ("hepta-pipecat.service", "hepta-pipecat-tools.service"):
         raise ValueError("unrelated_service_not_owned_by_voice_acceptance")
+    if verb not in ("start", "stop"):
+        raise ValueError("unsupported_service_action")
     env = {**os.environ, "XDG_RUNTIME_DIR": f"/run/user/{os.getuid()}"}
     subprocess.run(["systemctl", "--user", verb, unit],
                    env=env, capture_output=True, timeout=25, check=True)
@@ -194,6 +211,10 @@ async def main():
                 start_stop(unit, "stop")
             except Exception:
                 result.setdefault("failed_to_restore", []).append(unit)
+        if result.get("failed_to_restore"):
+            result["completed"] = False
+            result["real_pocket4_gpu_verified"] = False
+            result["blocker"] = "failed_to_restore_owned_services"
         result["services_started_and_stopped_by_this_run"] = started
         result["persisted_at_unix"] = time.time()
         REPORT.write_text(json.dumps(result, ensure_ascii=False, indent=2))
@@ -204,6 +225,8 @@ async def main():
             "synthetic_first_audio_measured": result.get("synthetic_audio_first_frame_measured"),
             "telephone_dialed": False,
         }, ensure_ascii=False), flush=True)
+        if result.get("failed_to_restore"):
+            raise GateClosed("failed_to_restore_owned_services")
 
 
 if __name__ == "__main__":

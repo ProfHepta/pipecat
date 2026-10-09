@@ -44,3 +44,10 @@
 - `ops/real_gpu_acceptance.py`要求预存的拥有者私有凭据、SSH AF_UNIX转发的SO_PEERCRED所有者与进程身份、固定Pocket4目标、模型认证/配置、Pipecat隔离与八阶段跨机收据均通过才可启动测试；失败时不启动模型/语音服务或碰电话。现场曾因缺少真实`llama.key`按预期拒绝，留下失败收据。
 - 最新完全隔离的**模拟LLM**＋实际Pocket4↔qian-qi PCM复测：63帧，首音 **2427.259ms**（Pocket4自己的时钟），内部首PCM帧 **2422.580ms**（qian-qi自己的时钟），双向哈希一致，旧帧0，明确不计真实GPU。模型端仅为临时Unix socket伪服务。
 - 本轮开发回归合计**109项通过**；引擎/跨机凭据接线仍缺授权执行放行，`production_ready=false`，无真正GPU首音或电话听感。
+
+## 2026-10-09 继续审计：SSH连接识别与回退状态
+
+- 新发现真实验收脚本中的SSH进程参数NUL分割错误：以字面反斜杠分割会把原始命令行当成一整项，可能误拒绝有效转发；现已按真正的字节0分隔。
+- 转发参数由“argv中出现预期地址文字”收紧为识别SSH `-L` 本地转发选项，并要求`-N`及固定`pocket4`目标。任意命令只是打印该地址不能作为连接证明。未变更SSH配置、端口、密钥与桌面控制链路。
+- 若Pipecat回归通过而恢复本轮启停的服务失败，验收现在强制降级为`completed=false`、`real_pocket4_gpu_verified=false`，记录`failed_to_restore_owned_services`并以非零状态退出，禁止生成假PASS。
+- 新增这两类失败路径回归，当前共119项单元测试通过（1项历史弃用警告）。正式`llama.key`和`llama.sock`仍未取得授权配置，当前结果依然不是GPU端到端首音或真人电话验收。
